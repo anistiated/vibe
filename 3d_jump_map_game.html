@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Parkour Jump Map</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js for Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #030712;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-glow {
+            box-shadow: 0 0 25px rgba(99, 102, 241, 0.6);
+            transition: all 0.2s ease;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 40px rgba(99, 102, 241, 0.9);
+            transform: scale(1.03);
+        }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(6px);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .touch-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="relative text-white overflow-hidden">
+
+    <!-- Game HUD (Large Text) -->
+    <div id="hud" class="absolute top-6 left-6 right-6 flex justify-between items-start pointer-events-none z-10 hidden">
+        <!-- Stage & Stats Info -->
+        <div class="glass-panel rounded-3xl px-8 py-5 flex gap-8 items-center shadow-2xl">
+            <div>
+                <p class="text-base font-bold text-slate-400 uppercase tracking-widest">스테이지</p>
+                <p id="stage-text" class="text-4xl font-black text-indigo-400">1 / 3</p>
+            </div>
+            <div class="h-10 w-1 bg-slate-700/80 rounded-full"></div>
+            <div>
+                <p class="text-base font-bold text-slate-400 uppercase tracking-widest">수집한 별</p>
+                <p id="stars-text" class="text-4xl font-black text-yellow-300">⭐ 0</p>
+            </div>
+            <div class="h-10 w-1 bg-slate-700/80 rounded-full"></div>
+            <div>
+                <p class="text-base font-bold text-slate-400 uppercase tracking-widest">시간</p>
+                <p id="timer-text" class="text-4xl font-black text-emerald-400">00:00.0</p>
+            </div>
+            <div class="h-10 w-1 bg-slate-700/80 rounded-full"></div>
+            <div>
+                <p class="text-base font-bold text-slate-400 uppercase tracking-widest">점프 횟수</p>
+                <p id="jumps-text" class="text-4xl font-black text-amber-400">0</p>
+            </div>
+        </div>
+
+        <!-- Controls Hint -->
+        <div class="glass-panel rounded-3xl p-6 hidden lg:block text-right shadow-2xl max-w-sm">
+            <h2 id="level-title" class="font-black text-2xl text-indigo-300">1단계: 우주 무한 런</h2>
+            <p id="level-desc" class="text-base font-semibold text-slate-300 mt-2 leading-relaxed">
+                🚀 <span class="text-yellow-300">자동 전진 모드!</span><br>[A / D / 방향키] 좌우 이동<br>[SPACE] 점프 / 다음 단계 진행<br>⭐ 공중에 뜬 별을 획득하세요!
+            </p>
+        </div>
+    </div>
+
+    <!-- Fast Fall Alert Banner -->
+    <div id="fall-alert" class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 glass-panel px-10 py-5 rounded-3xl text-center border-2 border-red-500/60 shadow-2xl transition-all duration-150 opacity-0 pointer-events-none z-30 scale-90">
+        <p class="text-4xl font-black text-red-400 mb-1">⚠️ 추락했습니다!</p>
+    </div>
+
+    <!-- Main Modal Overlay (Start & Clear Screens) -->
+    <div id="modal-overlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center z-20">
+        <div class="glass-panel p-10 md:p-14 rounded-3xl max-w-xl w-full mx-6 text-center shadow-2xl border-2 border-indigo-500/40">
+            <h1 id="modal-title" class="text-5xl md:text-6xl font-black bg-gradient-to-r from-cyan-400 via-indigo-300 to-pink-400 bg-clip-text text-transparent mb-6 tracking-tight">
+                3D 우주 점프맵
+            </h1>
+            <p id="modal-message" class="text-slate-200 text-xl md:text-2xl font-semibold mb-8 leading-relaxed">
+                우주 속 발판을 넘고 별들을 모아 골인 지점에 도달하세요!
+            </p>
+
+            <!-- Clear Stats View -->
+            <div id="modal-stats" class="hidden mb-8 p-6 rounded-2xl bg-slate-900/80 border border-slate-700 text-left space-y-4">
+                <div class="flex justify-between items-center text-xl md:text-2xl font-bold">
+                    <span class="text-slate-400">획득한 별:</span>
+                    <span id="final-stars" class="font-extrabold text-yellow-300">⭐ 0개</span>
+                </div>
+                <div class="flex justify-between items-center text-xl md:text-2xl font-bold">
+                    <span class="text-slate-400">클리어 시간:</span>
+                    <span id="final-time" class="font-extrabold text-emerald-400">00:00.0</span>
+                </div>
+                <div class="flex justify-between items-center text-xl md:text-2xl font-bold">
+                    <span class="text-slate-400">총 점프 횟수:</span>
+                    <span id="final-jumps" class="font-extrabold text-amber-400">0회</span>
+                </div>
+            </div>
+
+            <button id="start-btn" onclick="onModalButtonClick()" class="w-full py-6 px-8 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-2xl md:text-3xl btn-glow transition cursor-pointer">
+                게임 시작하기 (Space)
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobile-controls" class="absolute bottom-8 left-8 right-8 flex justify-between items-end md:hidden pointer-events-none z-10 hidden">
+        <div class="relative w-44 h-44 pointer-events-auto">
+            <button id="btn-up" class="touch-btn absolute top-0 left-14 w-16 h-16 text-3xl font-black">▲</button>
+            <button id="btn-down" class="touch-btn absolute bottom-0 left-14 w-16 h-16 text-3xl font-black">▼</button>
+            <button id="btn-left" class="touch-btn absolute left-0 top-14 w-16 h-16 text-3xl font-black">◄</button>
+            <button id="btn-right" class="touch-btn absolute right-0 top-14 w-16 h-16 text-3xl font-black">►</button>
+        </div>
+        <button id="btn-jump" class="touch-btn w-24 h-24 text-xl font-black bg-indigo-600/90 border-indigo-300 pointer-events-auto">점프</button>
+    </div>
+
+    <!-- Three.js Canvas Container -->
+    <div id="canvas-container" class="w-full h-full"></div>
+
+    <script>
+        // --- Web Audio API Sound Effects & BGM Engine ---
+        if (typeof audioCtx === 'undefined') {
+            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        let bgmInterval = null;
+        let bgmStep = 0;
+
+        function startBGM() {
+            if (bgmInterval) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const notes = [130.81, 146.83, 155.56, 174.61, 196.00, 174.61, 155.56, 146.83];
+            const leadNotes = [261.63, 311.13, 392.00, 349.23];
+
+            bgmInterval = setInterval(() => {
+                if (!isPlaying) return;
+                const now = audioCtx.currentTime;
+
+                const bassOsc = audioCtx.createOscillator();
+                const bassGain = audioCtx.createGain();
+                bassOsc.type = 'sawtooth';
+                bassOsc.frequency.setValueAtTime(notes[bgmStep % notes.length], now);
+                bassGain.gain.setValueAtTime(0.12, now);
+                bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                bassOsc.connect(bassGain);
+                bassGain.connect(audioCtx.destination);
+                bassOsc.start(now);
+                bassOsc.stop(now + 0.12);
+
+                if (bgmStep % 2 === 0) {
+                    const leadOsc = audioCtx.createOscillator();
+                    const leadGain = audioCtx.createGain();
+                    leadOsc.type = 'square';
+                    leadOsc.frequency.setValueAtTime(leadNotes[(bgmStep / 2) % leadNotes.length], now);
+                    leadGain.gain.setValueAtTime(0.06, now);
+                    leadGain.gain.exponentialRampToValueAtTime(0.005, now + 0.18);
+                    leadOsc.connect(leadGain);
+                    leadGain.connect(audioCtx.destination);
+                    leadOsc.start(now);
+                    leadOsc.stop(now + 0.18);
+                }
+
+                bgmStep++;
+            }, 140);
+        }
+
+        function stopBGM() {
+            if (bgmInterval) {
+                clearInterval(bgmInterval);
+                bgmInterval = null;
+            }
+        }
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            if (type === 'jump') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.exponentialRampToValueAtTime(450, now + 0.15);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'land') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(120, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
+            } else if (type === 'star') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.2);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now);
+                osc.stop(now + 0.2);
+            } else if (type === 'hit' || type === 'fall') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(60, now + 0.25);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } else if (type === 'win') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.4);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
+        // --- Expanded Game Stages Config (Total 12 Stages) ---
+        const STAGES = [
+            {
+                title: "1단계: 우주 무한 런",
+                desc: "공이 멈추지 않고 계속 전진합니다! 좌우로 조종하고 별을 먹으며 골인하세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1, z: -18, w: 6, h: 1, d: 8, color: 0x06b6d4, hasStar: true },
+                    { x: 2, y: 2.5, z: -32, w: 5, h: 1, d: 8, color: 0x06b6d4, hasStar: true },
+                    { x: -2, y: 4, z: -46, w: 5, h: 1, d: 8, color: 0x06b6d4, hasStar: true },
+                    { x: 0, y: 5.5, z: -62, w: 9, h: 1, d: 9, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "2단계: 궤도 질주",
+                desc: "움직이는 발판을 타이밍에 맞춰 무사히 통과하세요!",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -20, w: 7, h: 1, d: 10, color: 0xec4899, moveX: 3.5, speed: 1.3, hasStar: true },
+                    { x: 0, y: 3, z: -36, w: 7, h: 1, d: 10, color: 0x06b6d4, hasStar: true },
+                    { x: 0, y: 4.5, z: -52, w: 7, h: 1, d: 10, color: 0xec4899, moveX: -3.5, speed: 1.4, hasStar: true },
+                    { x: 0, y: 6, z: -70, w: 9, h: 1, d: 9, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "3단계: 성운 자동 복구 발판",
+                desc: "발판이 밟으면 사라지지만 1.8초 후 자동 복구됩니다! 멈추지 말고 달리세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -20, w: 5, h: 1, d: 7, color: 0xec4899, disappear: true, hasStar: true },
+                    { x: 2, y: 3, z: -36, w: 5, h: 1, d: 7, color: 0xec4899, disappear: true, hasStar: true },
+                    { x: -2, y: 4.5, z: -52, w: 5, h: 1, d: 7, color: 0xec4899, disappear: true, hasStar: true },
+                    { x: 0, y: 6, z: -70, w: 9, h: 1, d: 9, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "4단계: 고정 가시 장애물 존",
+                desc: "발판 중앙의 고정 가시 장애물을 좌우로 살짝 피해서 점프하세요!",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -22, w: 7, h: 1, d: 12, color: 0x06b6d4, hasObstacle: true, starOffset: 2.5 },
+                    { x: -2, y: 3, z: -40, w: 7, h: 1, d: 12, color: 0x8b5cf6, hasObstacle: true, starOffset: -2.5 },
+                    { x: 2, y: 4.5, z: -58, w: 7, h: 1, d: 12, color: 0xec4899, hasObstacle: true, starOffset: 2.5 },
+                    { x: 0, y: 6, z: -76, w: 7, h: 1, d: 12, color: 0x06b6d4, hasObstacle: true, starOffset: -2.5 },
+                    { x: 0, y: 8, z: -96, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "5단계: 긴 우주 고속도로 (초장거리)",
+                desc: "매우 긴 고속 코스입니다! 연속 점프와 별 수집으로 한계를 시원하게 돌파하세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1, z: -22, w: 6, h: 1, d: 10, color: 0x8b5cf6, hasStar: true },
+                    { x: -3, y: 2.5, z: -40, w: 6, h: 1, d: 10, color: 0x3b82f6, hasStar: true },
+                    { x: 3, y: 4, z: -58, w: 6, h: 1, d: 10, color: 0x06b6d4, moveX: 2.5, speed: 1.5, hasStar: true },
+                    { x: 0, y: 5.5, z: -76, w: 6, h: 1, d: 10, color: 0xec4899, disappear: true, hasStar: true },
+                    { x: -2, y: 7, z: -94, w: 6, h: 1, d: 10, color: 0x8b5cf6, hasStar: true },
+                    { x: 2, y: 8.5, z: -112, w: 6, h: 1, d: 10, color: 0x3b82f6, moveX: -2.5, speed: 1.6, hasStar: true },
+                    { x: 0, y: 10, z: -132, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "6단계: 아슬아슬 외나무다리",
+                desc: "발판 폭이 좁습니다! 정교한 조종으로 떨어지지 않게 별을 먹고 나아가세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -20, w: 3.2, h: 1, d: 10, color: 0x3b82f6, hasStar: true },
+                    { x: 1.5, y: 3, z: -36, w: 3.2, h: 1, d: 10, color: 0x8b5cf6, hasStar: true },
+                    { x: -1.5, y: 4.5, z: -52, w: 3.2, h: 1, d: 10, color: 0xec4899, hasStar: true },
+                    { x: 0, y: 6, z: -68, w: 3.2, h: 1, d: 10, color: 0x06b6d4, hasStar: true },
+                    { x: 0, y: 8, z: -86, w: 9, h: 1, d: 9, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "7단계: 이동 가시 콤보 난관",
+                desc: "움직이는 발판 위에 고정된 가시 장애물이 있습니다! 별을 수집하면서 뛰어넘으세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 7, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -22, w: 8, h: 1, d: 10, color: 0xec4899, moveX: 3, speed: 1.5, hasObstacle: true, starOffset: -3 },
+                    { x: 0, y: 3.5, z: -40, w: 8, h: 1, d: 10, color: 0x8b5cf6, moveX: -3, speed: 1.5, hasObstacle: true, starOffset: 3 },
+                    { x: 0, y: 5.5, z: -58, w: 8, h: 1, d: 10, color: 0x06b6d4, moveX: 3, speed: 1.8, disappear: true, starOffset: -3 },
+                    { x: 0, y: 7.5, z: -78, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "8단계: 은하계 관문 런",
+                desc: "사라지는 발판과 이동 발판이 조합된 스피드 존을 파헤치세요!",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 8, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 2, z: -22, w: 6, h: 1, d: 10, color: 0xec4899, moveX: 3.5, speed: 1.6, hasStar: true },
+                    { x: -2, y: 4, z: -40, w: 6, h: 1, d: 10, color: 0x8b5cf6, disappear: true, hasObstacle: true, starOffset: 2.5 },
+                    { x: 2, y: 6, z: -58, w: 6, h: 1, d: 10, color: 0x06b6d4, moveX: -3.5, speed: 1.8, hasStar: true },
+                    { x: 0, y: 8, z: -76, w: 5, h: 1, d: 10, color: 0xec4899, disappear: true, hasObstacle: true, starOffset: -2 },
+                    { x: -1.5, y: 10, z: -94, w: 5, h: 1, d: 10, color: 0x3b82f6, moveX: 2.5, speed: 2.0, hasStar: true },
+                    { x: 0, y: 12, z: -114, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "9단계: 철퇴 우주의 흔들리는 추",
+                desc: "공중에 달린 거대 가시 철퇴 장애물이 흔들립니다! 왕복 스윙 타이밍을 잘 보고 통과하세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 8, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -22, w: 8, h: 1, d: 12, color: 0x3b82f6, hasMace: true, maceAmplitude: 4.5, maceSpeed: 2.2, starOffset: 2.5 },
+                    { x: 0, y: 3.5, z: -42, w: 8, h: 1, d: 12, color: 0x8b5cf6, hasMace: true, maceAmplitude: -4.5, maceSpeed: 2.5, starOffset: -2.5 },
+                    { x: 0, y: 5.5, z: -62, w: 8, h: 1, d: 12, color: 0xec4899, moveX: 2, speed: 1.5, hasMace: true, maceAmplitude: 4, maceSpeed: 2.0, starOffset: 2 },
+                    { x: 0, y: 7.5, z: -82, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "10단계: 외계 우주선의 정찰 궤도",
+                desc: "빛을 뿜는 UFO 순찰 우주선 장애물이 가로막고 있습니다! 비행 경로를 피해 질주하세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 8, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 1.5, z: -24, w: 8, h: 1, d: 12, color: 0x06b6d4, hasUFO: true, ufoType: 'horizontal', ufoRange: 4, ufoSpeed: 2.0, starOffset: 2.5 },
+                    { x: -2, y: 3.5, z: -44, w: 8, h: 1, d: 12, color: 0xec4899, hasUFO: true, ufoType: 'vertical', ufoRange: 2.5, ufoSpeed: 2.5, starOffset: -2.5 },
+                    { x: 2, y: 5.5, z: -64, w: 8, h: 1, d: 12, color: 0x8b5cf6, hasUFO: true, ufoType: 'circle', ufoRange: 3, ufoSpeed: 2.2, starOffset: 2.5 },
+                    { x: 0, y: 7.5, z: -84, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "11단계: 철퇴와 UFO의 협공",
+                desc: "거대한 가시 철퇴와 외계 우주선이 함께 위협합니다! 별을 수집하고 순간 판단력을 발휘하세요.",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 8, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 2, z: -24, w: 8, h: 1, d: 12, color: 0x3b82f6, hasMace: true, maceAmplitude: 4, maceSpeed: 2.2, starOffset: -2.5 },
+                    { x: 0, y: 4, z: -44, w: 8, h: 1, d: 12, color: 0xec4899, moveX: 2.5, speed: 1.6, hasUFO: true, ufoType: 'horizontal', ufoRange: 3.5, ufoSpeed: 2.4, starOffset: 2.5 },
+                    { x: 0, y: 6, z: -64, w: 8, h: 1, d: 12, color: 0x8b5cf6, disappear: true, hasMace: true, maceAmplitude: -4.5, maceSpeed: 2.6, starOffset: -2.5 },
+                    { x: 0, y: 8, z: -84, w: 8, h: 1, d: 12, color: 0x06b6d4, hasUFO: true, ufoType: 'circle', ufoRange: 3.5, ufoSpeed: 2.5, starOffset: 2.5 },
+                    { x: 0, y: 10, z: -104, w: 10, h: 1, d: 10, color: 0x10b981, isGoal: true }
+                ]
+            },
+            {
+                title: "12단계: 최종 은하계 마스터 챔피언",
+                desc: "가시, 가시철퇴, UFO, 사라지는 발판이 모인 우주 최고의 관문입니다! 은하계 챔피언에 도전하세요!",
+                platforms: [
+                    { x: 0, y: 0, z: 0, w: 8, h: 1, d: 18, color: 0x4f46e5 },
+                    { x: 0, y: 2, z: -24, w: 7, h: 1, d: 10, color: 0xec4899, moveX: 3, speed: 1.8, hasObstacle: true, starOffset: -2.5 },
+                    { x: -2, y: 4, z: -44, w: 7, h: 1, d: 10, color: 0x8b5cf6, disappear: true, hasMace: true, maceAmplitude: 4.5, maceSpeed: 2.5, starOffset: 2.5 },
+                    { x: 2, y: 6, z: -64, w: 7, h: 1, d: 10, color: 0x06b6d4, moveX: -3, speed: 2.0, hasUFO: true, ufoType: 'circle', ufoRange: 3.5, ufoSpeed: 2.8, starOffset: -2.5 },
+                    { x: 0, y: 8, z: -84, w: 6, h: 1, d: 10, color: 0xec4899, disappear: true, hasMace: true, maceAmplitude: -4.5, maceSpeed: 2.8, starOffset: 2 },
+                    { x: 0, y: 10, z: -104, w: 6, h: 1, d: 10, color: 0x3b82f6, moveX: 2.5, speed: 2.2, hasUFO: true, ufoType: 'horizontal', ufoRange: 4, ufoSpeed: 3.0, starOffset: -2 },
+                    { x: 0, y: 12, z: -126, w: 12, h: 1, d: 12, color: 0x10b981, isGoal: true }
+                ]
+            }
+        ];
+
+        // --- Global Engine Variables ---
+        let scene, camera, renderer;
+        let player, ballMesh;
+        let starDecorations = [];
+        let obstacles = [];
+        let maceObstacles = [];
+        let ufoObstacles = [];
+        let currentStageIndex = 0;
+        let platforms = [];
+        let particles = [];
+        let isPlaying = false;
+        let timerInterval = null;
+        let startTime = 0;
+        let elapsedTime = 0;
+        let jumpCount = 0;
+        let collectedStarsCount = 0;
+        let isFallingReset = false;
+        let isAbducted = false;
+        let abductingUFO = null;
+        let tractorBeamMesh = null;
+
+        const physics = {
+            gravity: -32,
+            jumpForce: 14.5,
+            autoForwardSpeed: 14.5,
+            strafeSpeed: 13,
+            moveSpeed: 13,
+            velocity: new THREE.Vector3(),
+            isGrounded: false,
+            radius: 0.7
+        };
+
+        const keys = { forward: false, backward: false, left: false, right: false, jump: false };
+
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let cameraAngleX = 0;
+        let cameraAngleY = 0.35;
+        const cameraDistance = 11;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x030712);
+            scene.fog = new THREE.FogExp2(0x030712, 0.008);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            createSpaceBackground();
+
+            const ambient = new THREE.AmbientLight(0xdbeafe, 0.7);
+            scene.add(ambient);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(20, 50, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 200;
+            const d = 50;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            createPlayer();
+            setupInputs();
+            window.addEventListener('resize', onWindowResize);
+
+            if ('ontouchstart' in window) {
+                document.getElementById('mobile-controls').classList.remove('hidden');
+            }
+
+            animate(0);
+        }
+
+        function createSpaceBackground() {
+            const starsGeo = new THREE.BufferGeometry();
+            const count = 1200;
+            const positions = new Float32Array(count * 3);
+            const colors = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 350;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 350;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 350;
+
+                colors[i * 3] = 0.7 + Math.random() * 0.3;
+                colors[i * 3 + 1] = 0.8 + Math.random() * 0.2;
+                colors[i * 3 + 2] = 1.0;
+            }
+
+            starsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starsGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const starsMat = new THREE.PointsMaterial({
+                size: 0.8,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85
+            });
+
+            const starField = new THREE.Points(starsGeo, starsMat);
+            scene.add(starField);
+        }
+
+        function createPlayer() {
+            player = new THREE.Group();
+
+            const sphereGeo = new THREE.SphereGeometry(physics.radius, 32, 32);
+            const sphereMat = new THREE.MeshStandardMaterial({
+                color: 0x6366f1,
+                metalness: 0.4,
+                roughness: 0.2,
+                emissive: 0x312e81,
+                emissiveIntensity: 0.4
+            });
+
+            ballMesh = new THREE.Mesh(sphereGeo, sphereMat);
+            ballMesh.castShadow = true;
+            ballMesh.receiveShadow = true;
+
+            // Pattern lines on ball to accentuate rolling effect
+            const stripeGeo = new THREE.TorusGeometry(physics.radius + 0.01, 0.05, 16, 32);
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            const stripe1 = new THREE.Mesh(stripeGeo, stripeMat);
+            const stripe2 = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe2.rotation.x = Math.PI / 2;
+
+            ballMesh.add(stripe1);
+            ballMesh.add(stripe2);
+
+            player.add(ballMesh);
+            scene.add(player);
+        }
+
+        function create3DStarMesh() {
+            const starGroup = new THREE.Group();
+            
+            const starShape = new THREE.Shape();
+            const points = 5;
+            const outerRadius = 0.6;
+            const innerRadius = 0.28;
+
+            for (let i = 0; i < points * 2; i++) {
+                const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if (i === 0) starShape.moveTo(x, y);
+                else starShape.lineTo(x, y);
+            }
+
+            const extrudeSettings = { depth: 0.2, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08, bevelThickness: 0.08 };
+            const starGeo = new THREE.ExtrudeGeometry(starShape, extrudeSettings);
+            starGeo.center();
+
+            const starMat = new THREE.MeshStandardMaterial({
+                color: 0xfacc15,
+                emissive: 0xeab308,
+                emissiveIntensity: 0.6,
+                roughness: 0.2,
+                metalness: 0.5
+            });
+
+            const mesh = new THREE.Mesh(starGeo, starMat);
+            starGroup.add(mesh);
+            return starGroup;
+        }
+
+        function createObstacleMesh() {
+            const obsGeo = new THREE.ConeGeometry(0.8, 1.8, 8);
+            const obsMat = new THREE.MeshStandardMaterial({
+                color: 0xef4444,
+                emissive: 0xb91c1c,
+                emissiveIntensity: 0.6,
+                roughness: 0.2
+            });
+            const mesh = new THREE.Mesh(obsGeo, obsMat);
+            mesh.castShadow = true;
+            return mesh;
+        }
+
+        // --- Spiked Mace Ball Creation ---
+        function createMaceMesh() {
+            const group = new THREE.Group();
+
+            // Chain Wire
+            const chainGeo = new THREE.CylinderGeometry(0.06, 0.06, 4.5, 8);
+            const chainMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8, roughness: 0.3 });
+            const chain = new THREE.Mesh(chainGeo, chainMat);
+            chain.position.y = -2.25;
+            group.add(chain);
+
+            // Spiked Ball Body
+            const ballGeo = new THREE.SphereGeometry(1.0, 16, 16);
+            const ballMat = new THREE.MeshStandardMaterial({
+                color: 0xd97706,
+                emissive: 0x7c2d12,
+                emissiveIntensity: 0.5,
+                metalness: 0.7,
+                roughness: 0.3
+            });
+            const ball = new THREE.Mesh(ballGeo, ballMat);
+            ball.position.y = -4.5;
+            ball.castShadow = true;
+            group.add(ball);
+
+            // Spikes attached to ball
+            const spikeGeo = new THREE.ConeGeometry(0.3, 0.8, 8);
+            const spikeMat = new THREE.MeshStandardMaterial({ color: 0xf31260, metalness: 0.9, roughness: 0.1 });
+            const spikeDirections = [
+                [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1],
+                [0.7,0.7,0], [-0.7,0.7,0], [0.7,-0.7,0], [-0.7,-0.7,0]
+            ];
+
+            spikeDirections.forEach(dir => {
+                const spike = new THREE.Mesh(spikeGeo, spikeMat);
+                spike.position.set(dir[0] * 1.1, -4.5 + dir[1] * 1.1, dir[2] * 1.1);
+                spike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dir[0], dir[1], dir[2]));
+                group.add(spike);
+            });
+
+            return { group: group, ballCenterRelativeY: -4.5 };
+        }
+
+        // --- UFO Spaceship Creation ---
+        function createUFOMesh() {
+            const ufoGroup = new THREE.Group();
+
+            // Main Disc Body
+            const discGeo = new THREE.CylinderGeometry(1.6, 1.8, 0.4, 24);
+            const discMat = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                emissive: 0x0369a1,
+                emissiveIntensity: 0.6,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const disc = new THREE.Mesh(discGeo, discMat);
+            disc.castShadow = true;
+            ufoGroup.add(disc);
+
+            // Glass Dome
+            const domeGeo = new THREE.SphereGeometry(0.9, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const domeMat = new THREE.MeshStandardMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.75,
+                roughness: 0.1
+            });
+            const dome = new THREE.Mesh(domeGeo, domeMat);
+            dome.position.y = 0.2;
+            ufoGroup.add(dome);
+
+            // Glowing Bottom Ring Light
+            const ringGeo = new THREE.TorusGeometry(1.2, 0.1, 8, 24);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = -0.15;
+            ufoGroup.add(ring);
+
+            return ufoGroup;
+        }
+
+        function createTractorBeamMesh() {
+            const beamGeo = new THREE.CylinderGeometry(0.2, 1.8, 4.5, 16, 1, true);
+            const beamMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.65,
+                side: THREE.DoubleSide
+            });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.y = -2.25;
+            return beam;
+        }
+
+        function loadStage(index) {
+            platforms.forEach(p => scene.remove(p.mesh));
+            particles.forEach(pt => scene.remove(pt.mesh));
+            starDecorations.forEach(st => scene.remove(st.group));
+            obstacles.forEach(o => scene.remove(o.mesh));
+            maceObstacles.forEach(m => scene.remove(m.group));
+            ufoObstacles.forEach(u => scene.remove(u.mesh));
+
+            platforms = [];
+            particles = [];
+            starDecorations = [];
+            obstacles = [];
+            maceObstacles = [];
+            ufoObstacles = [];
+
+            const stageData = STAGES[index];
+
+            document.getElementById('stage-text').innerText = `${index + 1} / ${STAGES.length}`;
+            document.getElementById('level-title').innerText = stageData.title;
+            document.getElementById('level-desc').innerHTML = `${stageData.desc}<br>[A/D/방향키] 좌우 이동 | [SPACE] 점프`;
+
+            const startP = stageData.platforms[0];
+            player.position.set(startP.x, startP.y + startP.h / 2 + physics.radius + 0.2, startP.z);
+            physics.velocity.set(0, 0, 0);
+
+            cameraAngleX = 0;
+            cameraAngleY = 0.35;
+
+            stageData.platforms.forEach(data => {
+                const geo = new THREE.BoxGeometry(data.w, data.h, data.d);
+                let mat;
+
+                if (data.disappear) {
+                    mat = new THREE.MeshStandardMaterial({
+                        color: data.color,
+                        transparent: true,
+                        opacity: 0.85,
+                        roughness: 0.1
+                    });
+                } else if (data.isGoal) {
+                    mat = new THREE.MeshStandardMaterial({
+                        color: data.color,
+                        roughness: 0.2,
+                        emissive: 0x059669,
+                        emissiveIntensity: 0.5
+                    });
+                } else {
+                    mat = new THREE.MeshStandardMaterial({
+                        color: data.color,
+                        roughness: 0.4,
+                        metalness: 0.2
+                    });
+                }
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(data.x, data.y, data.z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+
+                if (data.isGoal) {
+                    const ringGeo = new THREE.TorusGeometry(data.w * 0.35, 0.12, 16, 32);
+                    const ringMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+                    const ring = new THREE.Mesh(ringGeo, ringMat);
+                    ring.rotation.x = Math.PI / 2;
+                    ring.position.y = data.h / 2 + 0.08;
+                    mesh.add(ring);
+                }
+
+                if (data.hasStar || data.starOffset !== undefined) {
+                    const starGroup = create3DStarMesh();
+                    const starX = data.x + (data.starOffset || 0);
+                    starGroup.position.set(starX, data.y + data.h / 2 + 1.3, data.z);
+                    scene.add(starGroup);
+                    starDecorations.push({
+                        group: starGroup,
+                        collected: false,
+                        initialY: data.y + data.h / 2 + 1.3,
+                        parentPlatform: mesh,
+                        offsetX: data.starOffset || 0
+                    });
+                }
+
+                if (data.hasObstacle) {
+                    const obsMesh = createObstacleMesh();
+                    obsMesh.position.set(data.x, data.y + data.h / 2 + 0.9, data.z);
+                    scene.add(obsMesh);
+                    obstacles.push({
+                        mesh: obsMesh,
+                        fixedY: data.y + data.h / 2 + 0.9,
+                        parentPlatform: mesh
+                    });
+                }
+
+                if (data.hasMace) {
+                    const maceObj = createMaceMesh();
+                    const pivotY = data.y + data.h / 2 + 5.5;
+                    maceObj.group.position.set(data.x, pivotY, data.z);
+                    scene.add(maceObj.group);
+
+                    maceObstacles.push({
+                        group: maceObj.group,
+                        parentPlatform: mesh,
+                        pivotY: pivotY,
+                        ballRelY: maceObj.ballCenterRelativeY,
+                        amplitude: data.maceAmplitude || 4,
+                        speed: data.maceSpeed || 2.2
+                    });
+                }
+
+                if (data.hasUFO) {
+                    const ufoMesh = createUFOMesh();
+                    const baseHeight = data.y + data.h / 2 + 1.2;
+                    ufoMesh.position.set(data.x, baseHeight, data.z);
+                    scene.add(ufoMesh);
+
+                    ufoObstacles.push({
+                        mesh: ufoMesh,
+                        parentPlatform: mesh,
+                        baseY: baseHeight,
+                        type: data.ufoType || 'horizontal',
+                        range: data.ufoRange || 3.5,
+                        speed: data.ufoSpeed || 2.2
+                    });
+                }
+
+                platforms.push({
+                    mesh: mesh,
+                    width: data.w,
+                    height: data.h,
+                    depth: data.d,
+                    initialPos: new THREE.Vector3(data.x, data.y, data.z),
+                    moveX: data.moveX || 0,
+                    moveZ: data.moveZ || 0,
+                    speed: data.speed || 0,
+                    disappear: data.disappear || false,
+                    stepped: false,
+                    stepTimer: 0,
+                    respawnTimer: 0,
+                    isGoal: data.isGoal || false
+                });
+            });
+        }
+
+        let isStageCompletedState = false;
+
+        function updateTimer() {
+            if (!isPlaying) return;
+            elapsedTime = performance.now() - startTime;
+            const totalSeconds = elapsedTime / 1000;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            const ms = Math.floor((totalSeconds % 1) * 10);
+
+            const formattedMin = String(minutes).padStart(2, '0');
+            const formattedSec = String(seconds).padStart(2, '0');
+
+            document.getElementById('timer-text').innerText = `${formattedMin}:${formattedSec}.${ms}`;
+        }
+
+        function onModalButtonClick() {
+            if (isStageCompletedState) {
+                if (currentStageIndex < STAGES.length - 1) {
+                    currentStageIndex++;
+                    startCurrentStage();
+                } else {
+                    currentStageIndex = 0;
+                    jumpCount = 0;
+                    document.getElementById('jumps-text').innerText = jumpCount;
+                    startCurrentStage();
+                }
+            } else {
+                jumpCount = 0;
+                document.getElementById('jumps-text').innerText = jumpCount;
+                startCurrentStage();
+            }
+        }
+
+        function startCurrentStage() {
+            document.getElementById('modal-overlay').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            loadStage(currentStageIndex);
+
+            isPlaying = true;
+            isFallingReset = false;
+            isAbducted = false;
+            isStageCompletedState = false;
+
+            startBGM();
+
+            if (currentStageIndex === 0) {
+                startTime = performance.now();
+                collectedStarsCount = 0;
+                document.getElementById('stars-text').innerText = `⭐ ${collectedStarsCount}`;
+            }
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 100);
+        }
+
+        function handleStageClear() {
+            isPlaying = false;
+            stopBGM();
+            playSound('win');
+            
+            // Gold Explosion Effect at Goal
+            createParticles(player.position, 0xfacc15, 80);
+            createParticles(player.position, 0x10b981, 60);
+
+            // Expanding Shockwave Ring Effect
+            const shockGeo = new THREE.RingGeometry(0.5, 1.2, 32);
+            const shockMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+            const shockMesh = new THREE.Mesh(shockGeo, shockMat);
+            shockMesh.rotation.x = Math.PI / 2;
+            shockMesh.position.copy(player.position);
+            shockMesh.position.y -= 0.6;
+            scene.add(shockMesh);
+
+            let shockScale = 1;
+            const animateGoalRing = () => {
+                shockScale += 0.35;
+                shockMesh.scale.set(shockScale, shockScale, shockScale);
+                shockMat.opacity -= 0.04;
+                if (shockMat.opacity > 0) {
+                    requestAnimationFrame(animateGoalRing);
+                } else {
+                    scene.remove(shockMesh);
+                }
+            };
+            animateGoalRing();
+
+            setTimeout(() => {
+                const overlay = document.getElementById('modal-overlay');
+                const title = document.getElementById('modal-title');
+                const msg = document.getElementById('modal-message');
+                const stats = document.getElementById('modal-stats');
+                const btn = document.getElementById('start-btn');
+
+                overlay.classList.remove('hidden');
+                stats.classList.remove('hidden');
+
+                document.getElementById('final-stars').innerText = `⭐ ${collectedStarsCount}개`;
+                document.getElementById('final-time').innerText = document.getElementById('timer-text').innerText;
+                document.getElementById('final-jumps').innerText = `${jumpCount}회`;
+
+                isStageCompletedState = true;
+
+                if (currentStageIndex < STAGES.length - 1) {
+                    title.innerText = "🎉 스테이지 클리어!";
+                    msg.innerText = `${currentStageIndex + 1}단계를 성공적으로 통과하셨습니다! [Space 키 누름]`;
+                    btn.innerText = "다음 단계 도전하기 (Space)";
+                } else {
+                    clearInterval(timerInterval);
+                    title.innerText = "🏆 최종 클리어!";
+                    msg.innerText = "축하합니다! 우주 연속점프의 모든 관문을 통과하셨습니다!";
+                    btn.innerText = "처음부터 다시하기 (Space)";
+                }
+            }, 600);
+        }
+
+        function handleAbduction(ufoMesh) {
+            if (isAbducted || isFallingReset) return;
+            isAbducted = true;
+            physics.velocity.set(0, 0, 0);
+            playSound('hit');
+
+            if (!tractorBeamMesh) {
+                tractorBeamMesh = createTractorBeamMesh();
+            }
+            ufoMesh.add(tractorBeamMesh);
+
+            let pullTimer = 0;
+            const abductInterval = setInterval(() => {
+                pullTimer += 0.05;
+                player.position.lerp(new THREE.Vector3(ufoMesh.position.x, ufoMesh.position.y - 0.4, ufoMesh.position.z), 0.25);
+                createParticles(player.position, 0x38bdf8, 3);
+
+                if (pullTimer >= 0.6) {
+                    clearInterval(abductInterval);
+                    if (tractorBeamMesh && tractorBeamMesh.parent) {
+                        tractorBeamMesh.parent.remove(tractorBeamMesh);
+                    }
+                    isAbducted = false;
+                    handleFall();
+                }
+            }, 30);
+        }
+
+        function handleFall() {
+            if (isFallingReset) return;
+            isFallingReset = true;
+            if (!isAbducted) playSound('fall');
+
+            const alert = document.getElementById('fall-alert');
+            alert.classList.remove('opacity-0', 'scale-90');
+            alert.classList.add('opacity-100', 'scale-100');
+
+            // Reset platform states (Re-enable disappearing platforms)
+            platforms.forEach(p => {
+                if (p.disappear) {
+                    p.stepped = false;
+                    p.stepTimer = 0;
+                    p.respawnTimer = 0;
+                    p.mesh.visible = true;
+                    p.mesh.material.opacity = 0.85;
+                }
+            });
+
+            const startP = STAGES[currentStageIndex].platforms[0];
+            player.position.set(startP.x, startP.y + startP.h / 2 + physics.radius + 0.2, startP.z);
+            physics.velocity.set(0, 0, 0);
+
+            setTimeout(() => {
+                alert.classList.remove('opacity-100', 'scale-100');
+                alert.classList.add('opacity-0', 'scale-90');
+                isFallingReset = false;
+            }, 350);
+        }
+
+        function updatePhysics(dt) {
+            if (isFallingReset || isAbducted) return;
+
+            let strafeInput = 0;
+            if (keys.left) strafeInput -= 1;
+            if (keys.right) strafeInput += 1;
+
+            physics.velocity.z = -physics.autoForwardSpeed;
+            physics.velocity.x = strafeInput * physics.strafeSpeed;
+
+            const rollAngle = (physics.autoForwardSpeed * dt) / physics.radius;
+            ballMesh.rotation.x -= rollAngle;
+            ballMesh.rotation.z -= (physics.velocity.x * dt) / physics.radius;
+
+            physics.velocity.y += physics.gravity * dt;
+
+            player.position.x += physics.velocity.x * dt;
+            player.position.y += physics.velocity.y * dt;
+            player.position.z += physics.velocity.z * dt;
+
+            starDecorations.forEach(st => {
+                if (!st.collected) {
+                    const dist = player.position.distanceTo(st.group.position);
+                    if (dist < physics.radius + 0.8) {
+                        st.collected = true;
+                        scene.remove(st.group);
+                        collectedStarsCount++;
+                        document.getElementById('stars-text').innerText = `⭐ ${collectedStarsCount}`;
+                        playSound('star');
+                        createParticles(st.group.position, 0xfacc15, 25);
+                    }
+                }
+            });
+
+            // Fixed Obstacle Hit Check
+            obstacles.forEach(obs => {
+                const dist = player.position.distanceTo(obs.mesh.position);
+                if (dist < physics.radius + 0.8) {
+                    playSound('hit');
+                    createParticles(player.position, 0xef4444, 20);
+                    handleFall();
+                }
+            });
+
+            // Mace Ball Hit Check
+            maceObstacles.forEach(m => {
+                const ballWorldPos = new THREE.Vector3(
+                    m.group.position.x,
+                    m.group.position.y + m.ballRelY,
+                    m.group.position.z
+                );
+                const dist = player.position.distanceTo(ballWorldPos);
+                if (dist < physics.radius + 1.2) {
+                    playSound('hit');
+                    createParticles(player.position, 0xd97706, 25);
+                    handleFall();
+                }
+            });
+
+            // UFO Abduction Hit Check
+            ufoObstacles.forEach(u => {
+                const dist = player.position.distanceTo(u.mesh.position);
+                if (dist < physics.radius + 1.8) {
+                    handleAbduction(u.mesh);
+                }
+            });
+
+            const wasGrounded = physics.isGrounded;
+            physics.isGrounded = false;
+
+            platforms.forEach(p => {
+                if (!p.mesh.visible) return;
+
+                const pPos = p.mesh.position;
+                const minX = pPos.x - p.width / 2 - physics.radius * 0.4;
+                const maxX = pPos.x + p.width / 2 + physics.radius * 0.4;
+                const minZ = pPos.z - p.depth / 2 - physics.radius * 0.4;
+                const maxZ = pPos.z + p.depth / 2 + physics.radius * 0.4;
+                const topY = pPos.y + p.height / 2;
+
+                if (player.position.x >= minX && player.position.x <= maxX &&
+                    player.position.z >= minZ && player.position.z <= maxZ) {
+
+                    if (player.position.y - physics.radius <= topY &&
+                        player.position.y - physics.radius >= topY - 0.7 &&
+                        physics.velocity.y <= 0) {
+
+                        player.position.y = topY + physics.radius;
+                        physics.velocity.y = 0;
+                        physics.isGrounded = true;
+
+                        if (!wasGrounded) {
+                            playSound('land');
+                        }
+
+                        if (p.disappear && !p.stepped) {
+                            p.stepped = true;
+                        }
+
+                        if (p.isGoal) {
+                            handleStageClear();
+                        }
+                    }
+                }
+            });
+
+            if (player.position.y < -5) {
+                handleFall();
+            }
+        }
+
+        function updatePlatforms(time, dt) {
+            platforms.forEach(p => {
+                if (p.moveX !== 0) {
+                    p.mesh.position.x = p.initialPos.x + Math.sin(time * p.speed) * p.moveX;
+                }
+                if (p.moveZ !== 0) {
+                    p.mesh.position.z = p.initialPos.z + Math.cos(time * p.speed) * p.moveZ;
+                }
+
+                // Disappearing & Auto-Respawning Platform Logic (1.8s Respawn)
+                if (p.disappear) {
+                    if (p.stepped && p.mesh.visible) {
+                        p.stepTimer += dt;
+                        p.mesh.material.opacity = Math.max(0, 0.85 - p.stepTimer * 1.2);
+
+                        if (p.stepTimer > 0.7) {
+                            p.mesh.visible = false;
+                        }
+                    } else if (!p.mesh.visible) {
+                        p.respawnTimer += dt;
+                        if (p.respawnTimer > 1.8) {
+                            p.mesh.visible = true;
+                            p.mesh.material.opacity = 0.85;
+                            p.stepped = false;
+                            p.stepTimer = 0;
+                            p.respawnTimer = 0;
+                        }
+                    }
+                }
+            });
+
+            // Update Fixed Obstacle Positions attached to platforms
+            obstacles.forEach(obs => {
+                obs.mesh.position.x = obs.parentPlatform.position.x;
+                obs.mesh.position.y = obs.fixedY;
+            });
+
+            // Update Mace Obstacles Swinging
+            maceObstacles.forEach(m => {
+                const angle = Math.sin(time * m.speed) * (m.amplitude * 0.15);
+                m.group.rotation.z = angle;
+                m.group.position.x = m.parentPlatform.position.x;
+            });
+
+            // Update UFO Obstacles Flying Behavior
+            ufoObstacles.forEach(u => {
+                u.mesh.rotation.y += dt * 3.0;
+                if (u.type === 'horizontal') {
+                    u.mesh.position.x = u.parentPlatform.position.x + Math.sin(time * u.speed) * u.range;
+                    u.mesh.position.y = u.baseY;
+                } else if (u.type === 'vertical') {
+                    u.mesh.position.x = u.parentPlatform.position.x;
+                    u.mesh.position.y = u.baseY + Math.sin(time * u.speed) * u.range;
+                } else if (u.type === 'circle') {
+                    u.mesh.position.x = u.parentPlatform.position.x + Math.sin(time * u.speed) * u.range;
+                    u.mesh.position.y = u.baseY + Math.cos(time * u.speed * 1.2) * (u.range * 0.4);
+                }
+            });
+
+            starDecorations.forEach((st, idx) => {
+                if (!st.collected && st.group) {
+                    st.group.rotation.y += dt * 2.5;
+                    st.group.position.x = st.parentPlatform.position.x + st.offsetX;
+                    st.group.position.y = st.initialY + Math.sin(time * 4 + idx) * 0.2;
+                }
+            });
+        }
+
+        function createParticles(pos, color, count = 20) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.SphereGeometry(0.12, 8, 8);
+                const mat = new THREE.MeshBasicMaterial({ color: color });
+                const pMesh = new THREE.Mesh(geo, mat);
+                pMesh.position.copy(pos);
+                scene.add(pMesh);
+
+                const vel = new THREE.Vector3(
+                    (Math.random() - 0.5) * 8,
+                    Math.random() * 7 + 2,
+                    (Math.random() - 0.5) * 8
+                );
+
+                particles.push({ mesh: pMesh, vel: vel, life: 1.0 });
+            }
+        }
+
+        function setupInputs() {
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && !document.getElementById('modal-overlay').classList.contains('hidden')) {
+                    onModalButtonClick();
+                    return;
+                }
+
+                if (!isPlaying || isFallingReset) return;
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': keys.forward = true; break;
+                    case 'KeyS': case 'ArrowDown': keys.backward = true; break;
+                    case 'KeyA': case 'ArrowLeft': keys.left = true; break;
+                    case 'KeyD': case 'ArrowRight': keys.right = true; break;
+                    case 'Space':
+                        if (!keys.jump && physics.isGrounded) {
+                            physics.velocity.y = physics.jumpForce;
+                            physics.isGrounded = false;
+                            jumpCount++;
+                            document.getElementById('jumps-text').innerText = jumpCount;
+                            playSound('jump');
+                            createParticles(player.position, 0xa5b4fc, 10);
+                        }
+                        keys.jump = true;
+                        break;
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                switch (e.code) {
+                    case 'KeyW': case 'ArrowUp': keys.forward = false; break;
+                    case 'KeyS': case 'ArrowDown': keys.backward = false; break;
+                    case 'KeyA': case 'ArrowLeft': keys.left = false; break;
+                    case 'KeyD': case 'ArrowRight': keys.right = false; break;
+                    case 'Space': keys.jump = false; break;
+                }
+            });
+
+            window.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON') return;
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                cameraAngleX -= deltaX * 0.005;
+                cameraAngleY += deltaY * 0.005;
+                cameraAngleY = Math.max(0.08, Math.min(Math.PI / 2.2, cameraAngleY));
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mouseup', () => isDragging = false);
+
+            const bindTouch = (id, keyName) => {
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    if (keyName === 'jump') {
+                        if (physics.isGrounded && isPlaying && !isFallingReset) {
+                            physics.velocity.y = physics.jumpForce;
+                            physics.isGrounded = false;
+                            jumpCount++;
+                            document.getElementById('jumps-text').innerText = jumpCount;
+                            playSound('jump');
+                            createParticles(player.position, 0xa5b4fc, 10);
+                        }
+                    } else {
+                        keys[keyName] = true;
+                    }
+                });
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (keyName !== 'jump') keys[keyName] = false;
+                });
+            };
+
+            bindTouch('btn-up', 'forward');
+            bindTouch('btn-down', 'backward');
+            bindTouch('btn-left', 'left');
+            bindTouch('btn-right', 'right');
+            bindTouch('btn-jump', 'jump');
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const pt = particles[i];
+                pt.life -= dt * 2.2;
+                pt.mesh.position.addScaledVector(pt.vel, dt);
+                pt.mesh.scale.setScalar(pt.life);
+
+                if (pt.life <= 0) {
+                    scene.remove(pt.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function updateCamera() {
+            const cx = player.position.x + cameraDistance * Math.sin(cameraAngleX) * Math.cos(cameraAngleY);
+            const cy = player.position.y + cameraDistance * Math.sin(cameraAngleY);
+            const cz = player.position.z + cameraDistance * Math.cos(cameraAngleX) * Math.cos(cameraAngleY);
+
+            camera.position.set(cx, cy, cz);
+            camera.lookAt(player.position.x, player.position.y + 0.5, player.position.z);
+        }
+
+        let lastTime = 0;
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min((time - lastTime) / 1000, 0.1);
+            lastTime = time;
+
+            if (isPlaying) {
+                updatePhysics(dt);
+                updatePlatforms(time / 1000, dt);
+                updateParticles(dt);
+            }
+
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = () => {
+            init();
+        };
+    </script>
+</body>
+</html>
