@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스카이 발룬 크러시 (Sky Balloon Crush)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Noto Sans KR', sans-serif;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 480px;
+            height: 720px;
+            background: linear-gradient(180deg, #6dd5ed 0%, #2193b0 100%);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 0 10px rgba(255,255,255,0.3);
+            overflow: hidden;
+            border: 4px solid #ffffff33;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD Overlay */
+        .hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-card {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            padding: 8px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            font-family: 'Jua', sans-serif;
+            font-size: 18px;
+            color: #fff;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .weather-tag {
+            background: rgba(0, 0, 0, 0.25);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        /* Start / Pause / GameOver Modal */
+        .modal {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .modal-card {
+            background: #ffffff;
+            color: #333;
+            width: 85%;
+            padding: 24px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            animation: modalUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalUp {
+            from { transform: translateY(30px) scale(0.9); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        .modal-title {
+            font-family: 'Jua', sans-serif;
+            font-size: 32px;
+            color: #2b5876;
+            margin-bottom: 8px;
+        }
+
+        .btn-start {
+            margin-top: 16px;
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+            border: none;
+            border-radius: 16px;
+            color: #fff;
+            font-family: 'Jua', sans-serif;
+            font-size: 22px;
+            cursor: pointer;
+            box-shadow: 0 8px 15px rgba(255, 75, 43, 0.4);
+            transition: all 0.2s;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(255, 75, 43, 0.5);
+        }
+
+        .btn-start:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        /* 테스트 도구 스타일 */
+        .temp-test-box {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 2px dashed #CBD5E1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .temp-test-title {
+            font-size: 14px;
+            color: #475569;
+            font-weight: bold;
+        }
+
+        .temp-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .temp-input {
+            width: 80px;
+            padding: 6px 10px;
+            border-radius: 12px;
+            border: 2px solid #3B82F6;
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            outline: none;
+            color: #1E293B;
+        }
+
+        .btn-temp-apply {
+            background: #3B82F6;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-temp-apply:hover {
+            background: #2563EB;
+        }
+
+        .legend {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 16px 0 8px 0;
+            text-align: left;
+            font-size: 13px;
+            color: #64748B;
+            background: #F8FAFC;
+            padding: 12px;
+            border-radius: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- HUD overlay -->
+        <div class="hud">
+            <div class="hud-card">
+                <i class="fa-solid fa-trophy text-yellow-300"></i>
+                <span id="score-text">0</span>
+            </div>
+            <div class="weather-tag" id="weather-tag">
+                ☀️ 서울 11°C 쾌적 (1.0x)
+            </div>
+            <div class="hud-card">
+                <i class="fa-solid fa-heart text-red-500"></i>
+                <span id="lives-text">3</span>
+            </div>
+        </div>
+
+        <canvas id="gameCanvas" width="480" height="720"></canvas>
+
+        <!-- Start/Result Modal -->
+        <div class="modal" id="modal">
+            <div class="modal-card">
+                <div class="modal-title" id="modal-title">스카이 발룬 크러시</div>
+                <p id="modal-desc" class="text-slate-500 text-sm mb-2">기온에 따라 검의 날아가는 속도가 변화합니다!</p>
+
+                <div class="legend" id="legend-box">
+                    <div class="legend-item"><span class="legend-badge" style="background:#FF4B4B"></span> 일반 풍선 (1차)</div>
+                    <div class="legend-item"><span class="legend-badge" style="background:#4A90E2"></span> 단단한 풍선 (2차)</div>
+                    <div class="legend-item"><span class="legend-badge" style="background:#E67E22"></span> 💣 폭탄 (범위 폭발)</div>
+                    <div class="legend-item"><span class="legend-badge" style="background:#00E5FF"></span> ⚡ 십자 (행/열 파괴)</div>
+                </div>
+
+                <button class="btn-start" id="btn-start">게임 시작</button>
+
+                <!-- 테스트용 기온 설정 영역 -->
+                <div class="temp-test-box">
+                    <span class="temp-test-title">🧪 테스트용 기온 직접 설정</span>
+                    <div class="temp-input-group">
+                        <input type="number" id="temp-input" class="temp-input" value="11" step="1">
+                        <span style="color:#2C3E50; font-weight:bold;">°C</span>
+                        <button id="btn-temp-apply" class="btn-temp-apply">적용</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Web Audio API Synth Sound Generator ---
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioCtx();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'bounce') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.08);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'pop') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(400 + Math.random() * 200, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'boom') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+                    gain.gain.setValueAtTime(0.6, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'cross') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(600, now);
+                    osc.frequency.setValueAtTime(900, now + 0.05);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'lifeLost') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.linearRampToValueAtTime(110, now + 0.3);
+                    gain.gain.setValueAtTime(0.5, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                }
+            } catch (e) {
+                // Ignore audio errors
+            }
+        }
+
+        // --- Game Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CANVAS_WIDTH = 480;
+        const CANVAS_HEIGHT = 720;
+
+        // UI elements
+        const scoreText = document.getElementById('score-text');
+        const livesText = document.getElementById('lives-text');
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalDesc = document.getElementById('modal-desc');
+        const btnStart = document.getElementById('btn-start');
+        const tempInputEl = document.getElementById('temp-input');
+        const btnTempApply = document.getElementById('btn-temp-apply');
+        const weatherTagEl = document.getElementById('weather-tag');
+
+        // Game State
+        let gameState = 'START';
+        let score = 0;
+        let lives = 3;
+        let stage = 1;
+        let currentTemp = 11;
+        let speedMultiplier = 1.0;
+
+        // Update Speed based on temperature
+        function updateTemperature(temp) {
+            currentTemp = parseFloat(temp);
+            tempInputEl.value = currentTemp;
+
+            let modeText = '';
+            let icon = '☀️';
+
+            if (currentTemp >= 25) {
+                speedMultiplier = 1.4;
+                modeText = '🔥 더위 (1.4x)';
+                icon = '🔥';
+            } else if (currentTemp < 10) {
+                speedMultiplier = 0.7;
+                modeText = '❄️ 추위 (0.7x)';
+                icon = '❄️';
+            } else {
+                speedMultiplier = 1.0;
+                modeText = '☀️ 쾌적 (1.0x)';
+                icon = '☀️';
+            }
+
+            if (weatherTagEl) {
+                weatherTagEl.textContent = `${icon} 서울 ${currentTemp}°C ${modeText}`;
+            }
+        }
+
+        btnTempApply.addEventListener('click', () => {
+            updateTemperature(tempInputEl.value);
+        });
+
+        // Game Objects
+        let paddle = {
+            x: CANVAS_WIDTH / 2 - 60,
+            y: CANVAS_HEIGHT - 35,
+            width: 120,
+            height: 18,
+            color: '#34495E',
+            targetX: CANVAS_WIDTH / 2 - 60
+        };
+
+        let swords = [];
+        let balloons = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        function resetSwords() {
+            swords = [{
+                x: paddle.x + paddle.width / 2,
+                y: paddle.y - 12,
+                vx: 0,
+                vy: 0,
+                radius: 8,
+                stuck: true,
+                angle: 0
+            }];
+        }
+
+        function launchSword() {
+            swords.forEach(s => {
+                if (s.stuck) {
+                    s.stuck = false;
+                    s.vx = (Math.random() - 0.5) * 4 * speedMultiplier;
+                    s.vy = (-7 - Math.min(stage * 0.5, 3)) * speedMultiplier;
+                }
+            });
+        }
+
+        function initBalloons() {
+            balloons = [];
+            const rows = 5;
+            const cols = 6;
+            const padding = 10;
+            const startY = 80;
+            const totalWidth = CANVAS_WIDTH - 40;
+            const bWidth = (totalWidth - (cols - 1) * padding) / cols;
+            const bHeight = 45;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = 20 + c * (bWidth + padding);
+                    const y = startY + r * (bHeight + padding);
+
+                    let type = 'normal';
+                    let hp = 1;
+                    let color = '#FF4B4B';
+
+                    const rand = Math.random();
+                    if (rand < 0.15) {
+                        type = 'bomb';
+                        color = '#E67E22';
+                    } else if (rand < 0.28) {
+                        type = 'cross';
+                        color = '#00E5FF';
+                    } else if (rand < 0.55) {
+                        type = 'hard';
+                        hp = 2;
+                        color = '#4A90E2';
+                    }
+
+                    balloons.push({
+                        x: x,
+                        y: y,
+                        width: bWidth,
+                        height: bHeight,
+                        type: type,
+                        hp: hp,
+                        maxHp: hp,
+                        color: color,
+                        r: r,
+                        c: c,
+                        wobbleOffset: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+        }
+
+        // Particle FX
+        function createPopParticles(x, y, color, count = 12) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 2;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: Math.random() * 4 + 2,
+                    color: color,
+                    alpha: 1,
+                    life: 1
+                });
+            }
+        }
+
+        function createFloatingText(text, x, y, color = '#FFD700') {
+            floatingTexts.push({
+                text: text,
+                x: x,
+                y: y,
+                vy: -1.5,
+                alpha: 1,
+                color: color
+            });
+        }
+
+        // Controls
+        let isPointerDown = false;
+
+        function handlePointerMove(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = CANVAS_WIDTH / rect.width;
+            const canvasX = (clientX - rect.left) * scaleX;
+            paddle.targetX = canvasX - paddle.width / 2;
+        }
+
+        canvas.addEventListener('mousemove', (e) => handlePointerMove(e.clientX));
+        canvas.addEventListener('touchstart', (e) => {
+            initAudio();
+            isPointerDown = true;
+            if (e.touches.length > 0) handlePointerMove(e.touches[0].clientX);
+            if (gameState === 'PLAYING') launchSword();
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) handlePointerMove(e.touches[0].clientX);
+        }, { passive: true });
+
+        canvas.addEventListener('click', () => {
+            initAudio();
+            if (gameState === 'PLAYING') launchSword();
+        });
+
+        // Game Logic
+        function startStage() {
+            resetSwords();
+            initBalloons();
+        }
+
+        function triggerBombExplosion(bombBalloon) {
+            playSound('boom');
+            createPopParticles(bombBalloon.x + bombBalloon.width/2, bombBalloon.y + bombBalloon.height/2, '#E67E22', 25);
+            
+            balloons.forEach(b => {
+                if (b.hp > 0) {
+                    const dist = Math.hypot(
+                        (b.x + b.width/2) - (bombBalloon.x + bombBalloon.width/2),
+                        (b.y + b.height/2) - (bombBalloon.y + bombBalloon.height/2)
+                    );
+                    if (dist < 110) {
+                        damageBalloon(b, true);
+                    }
+                }
+            });
+        }
+
+        function triggerCrossExplosion(crossBalloon) {
+            playSound('cross');
+            createPopParticles(crossBalloon.x + crossBalloon.width/2, crossBalloon.y + crossBalloon.height/2, '#00E5FF', 25);
+
+            balloons.forEach(b => {
+                if (b.hp > 0) {
+                    if (b.r === crossBalloon.r || b.c === crossBalloon.c) {
+                        damageBalloon(b, true);
+                    }
+                }
+            });
+        }
+
+        function damageBalloon(b, isChain = false) {
+            if (b.hp <= 0) return;
+
+            b.hp--;
+            if (b.hp <= 0) {
+                score += (b.type === 'normal' ? 10 : 20);
+                scoreText.textContent = score;
+
+                createPopParticles(b.x + b.width/2, b.y + b.height/2, b.color, 15);
+                createFloatingText('+' + (b.type === 'normal' ? 10 : 20), b.x + b.width/2, b.y);
+
+                if (!isChain) playSound('pop');
+
+                if (b.type === 'bomb') triggerBombExplosion(b);
+                if (b.type === 'cross') triggerCrossExplosion(b);
+            } else {
+                b.color = '#7FA8D8'; // HP decreased color for hard balloon
+                playSound('bounce');
+            }
+        }
+
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            // Smooth Paddle Move
+            paddle.x += (paddle.targetX - paddle.x) * 0.25;
+            paddle.x = Math.max(0, Math.min(CANVAS_WIDTH - paddle.width, paddle.x));
+
+            // Update Swords
+            let activeSwords = 0;
+            swords.forEach(s => {
+                if (s.stuck) {
+                    s.x = paddle.x + paddle.width / 2;
+                    s.y = paddle.y - 12;
+                    activeSwords++;
+                    return;
+                }
+
+                s.x += s.vx;
+                s.y += s.vy;
+                s.angle = Math.atan2(s.vy, s.vx) + Math.PI / 2;
+
+                // Wall Collision
+                if (s.x - s.radius < 0) {
+                    s.x = s.radius;
+                    s.vx *= -1;
+                    playSound('bounce');
+                }
+                if (s.x + s.radius > CANVAS_WIDTH) {
+                    s.x = CANVAS_WIDTH - s.radius;
+                    s.vx *= -1;
+                    playSound('bounce');
+                }
+                if (s.y - s.radius < 0) {
+                    s.y = s.radius;
+                    s.vy *= -1;
+                    playSound('bounce');
+                }
+
+                // Paddle Collision
+                if (
+                    s.vy > 0 &&
+                    s.y + s.radius >= paddle.y &&
+                    s.y - s.radius <= paddle.y + paddle.height &&
+                    s.x >= paddle.x &&
+                    s.x <= paddle.x + paddle.width
+                ) {
+                    s.y = paddle.y - s.radius;
+                    const hitPos = (s.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+                    const speed = Math.hypot(s.vx, s.vy);
+                    const newAngle = hitPos * (Math.PI / 3); // Max 60 deg angle
+                    s.vx = Math.sin(newAngle) * speed;
+                    s.vy = -Math.cos(newAngle) * speed;
+                    playSound('bounce');
+                }
+
+                // Balloon Collision
+                balloons.forEach(b => {
+                    if (b.hp <= 0) return;
+
+                    // AABB vs Circle
+                    const closestX = Math.max(b.x, Math.min(s.x, b.x + b.width));
+                    const closestY = Math.max(b.y, Math.min(s.y, b.y + b.height));
+                    const distX = s.x - closestX;
+                    const distY = s.y - closestY;
+                    const distance = Math.hypot(distX, distY);
+
+                    if (distance < s.radius) {
+                        // Reflect speed
+                        if (Math.abs(distX) > Math.abs(distY)) {
+                            s.vx *= -1;
+                        } else {
+                            s.vy *= -1;
+                        }
+                        damageBalloon(b);
+                    }
+                });
+
+                // Bottom boundary (Death)
+                if (s.y - s.radius < CANVAS_HEIGHT) {
+                    activeSwords++;
+                }
+            });
+
+            // Filter dead swords
+            swords = swords.filter(s => s.y - s.radius < CANVAS_HEIGHT);
+
+            if (activeSwords === 0) {
+                lives--;
+                livesText.textContent = lives;
+                playSound('lifeLost');
+
+                if (lives <= 0) {
+                    gameState = 'GAMEOVER';
+                    showModal('게임 오버 😭', `최종 점수: ${score}점`);
+                } else {
+                    resetSwords();
+                }
+            }
+
+            // Check Stage Clear
+            const remainingBalloons = balloons.filter(b => b.hp > 0).length;
+            if (remainingBalloons === 0) {
+                stage++;
+                createFloatingText('STAGE CLEAR!', CANVAS_WIDTH / 2 - 50, CANVAS_HEIGHT / 2, '#00FF7F');
+                startStage();
+            }
+
+            // Particles
+            particles.forEach((p, index) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) particles.splice(index, 1);
+            });
+
+            // Floating Texts
+            floatingTexts.forEach((ft, index) => {
+                ft.y += ft.vy;
+                ft.alpha -= 0.02;
+                if (ft.alpha <= 0) floatingTexts.splice(index, 1);
+            });
+        }
+
+        // Render Functions
+        function drawBalloon(b) {
+            const time = Date.now() * 0.003;
+            const wobbleY = Math.sin(time + b.wobbleOffset) * 3;
+            const cx = b.x + b.width / 2;
+            const cy = b.y + b.height / 2 + wobbleY;
+            const rx = b.width / 2;
+            const ry = b.height / 2;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+            ctx.fillStyle = b.color;
+            ctx.fill();
+
+            // Highlight
+            ctx.beginPath();
+            ctx.ellipse(cx - rx * 0.3, cy - ry * 0.3, rx * 0.25, ry * 0.25, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+
+            // Balloon Knot & String
+            ctx.beginPath();
+            ctx.moveTo(cx - 3, cy + ry);
+            ctx.lineTo(cx + 3, cy + ry);
+            ctx.lineTo(cx, cy + ry + 4);
+            ctx.fillStyle = b.color;
+            ctx.fill();
+
+            // Icons for Special Balloons
+            if (b.type === 'bomb') {
+                ctx.fillStyle = '#FFF';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('💣', cx, cy);
+            } else if (b.type === 'cross') {
+                ctx.fillStyle = '#FFF';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('⚡', cx, cy);
+            } else if (b.type === 'hard' && b.hp === 2) {
+                ctx.strokeStyle = '#FFF';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(cx - 8, cy - 8, 16, 16);
+            }
+
+            ctx.restore();
+        }
+
+        function drawPaddle() {
+            ctx.save();
+            ctx.fillStyle = paddle.color;
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 8;
+            ctx.shadowOffsetY = 4;
+
+            // Rounded paddle
+            ctx.beginPath();
+            ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 10);
+            ctx.fill();
+
+            // Inner Metallic Highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.beginPath();
+            ctx.roundRect(paddle.x + 4, paddle.y + 3, paddle.width - 8, 4, 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawSword(s) {
+            ctx.save();
+            ctx.translate(s.x, s.y);
+            ctx.rotate(s.angle);
+
+            // Sword Blade
+            ctx.fillStyle = '#E2E8F0';
+            ctx.beginPath();
+            ctx.moveTo(0, -16);
+            ctx.lineTo(5, 4);
+            ctx.lineTo(-5, 4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Sword Guard
+            ctx.fillStyle = '#F59E0B';
+            ctx.fillRect(-8, 4, 16, 3);
+
+            // Handle
+            ctx.fillStyle = '#78350F';
+            ctx.fillRect(-2, 7, 4, 7);
+
+            // Glow FX
+            ctx.shadowColor = '#00E5FF';
+            ctx.shadowBlur = 10;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw Balloons
+            balloons.forEach(b => {
+                if (b.hp > 0) drawBalloon(b);
+            });
+
+            // Draw Paddle
+            drawPaddle();
+
+            // Draw Swords
+            swords.forEach(drawSword);
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+
+            // Draw Floating Texts
+            floatingTexts.forEach(ft => {
+                ctx.save();
+                ctx.globalAlpha = ft.alpha;
+                ctx.fillStyle = ft.color;
+                ctx.font = 'bold 20px Jua';
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+            });
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function showModal(title, desc) {
+            modalTitle.textContent = title;
+            modalDesc.textContent = desc;
+            modal.classList.remove('hidden');
+        }
+
+        function hideModal() {
+            modal.classList.add('hidden');
+        }
+
+        btnStart.addEventListener('click', () => {
+            initAudio();
+            score = 0;
+            lives = 3;
+            stage = 1;
+            scoreText.textContent = score;
+            livesText.textContent = lives;
+            gameState = 'PLAYING';
+            hideModal();
+            startStage();
+        });
+
+        // Initialize Temperature default
+        updateTemperature(11);
+
+        startStage();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
